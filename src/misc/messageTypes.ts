@@ -1,26 +1,15 @@
+import { FireStoreCollectionRef, FireStoreQuery } from './firebase-models';
+import { ParsedRefDoc } from './internal.models';
 // Firebase types
-import { CollectionReference } from "@firebase/firestore-types";
+import { GetListParams } from './react-admin-models';
 
 // PARAMETERS
 export namespace messageTypes {
-  export interface IParamsGetList {
-    pagination: {
-      page: number;
-      perPage: number;
-    };
-    sort?: {
-      field: string;
-      order: string;
-    };
-    filter?: {
-      collectionQuery?: CollectionQueryType;
-      [fieldName: string]: any;
-    };
-  }
+  export type IParamsGetList = GetListParams;
 
   export type CollectionQueryType = (
-    arg0: CollectionReference
-  ) => CollectionReference;
+    arg0: FireStoreCollectionRef
+  ) => FireStoreQuery;
 
   export interface IParamsGetOne {
     id: string;
@@ -55,8 +44,9 @@ export namespace messageTypes {
     ids: string[];
   }
 
+  export type IdMaybeRef = string | any;
   export interface IParamsGetMany {
-    ids: string[];
+    ids: (string | ParsedRefDoc)[];
   }
 
   export interface IParamsGetManyReference {

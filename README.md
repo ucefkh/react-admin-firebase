@@ -1,5 +1,4 @@
 # react-admin-firebase
-
 <!-- [START badges] -->
 [![NPM Version](https://img.shields.io/npm/v/react-admin-firebase.svg)](https://www.npmjs.com/package/react-admin-firebase) 
 [![License](https://img.shields.io/npm/l/react-admin-firebase.svg)](https://github.com/benwinding/react-admin-firebase/blob/master/LICENSE) 
@@ -16,7 +15,7 @@ A firebase data provider for the [React-Admin](https://github.com/marmelab/react
 - [x] Firebase AuthProvider (email, password)
 - [x] Login with: Google, Facebook, Github etc... [(Example Here)](https://github.com/benwinding/react-admin-firebase/blob/master/src-demo/src/CustomLoginPage.js)
 - [x] Forgot password button... [(Example Here)](https://github.com/benwinding/react-admin-firebase/blob/master/src-demo/src/CustomForgotPassword.js)
-- [x] Firebase storage upload functionality
+- [x] Firebase storage upload functionality, with upload monitoring... [(Example Here)](https://github.com/benwinding/react-admin-firebase/blob/master/src-demo/src/EventMonitor.js)
 
 _Pull requests welcome!!_
 
@@ -69,7 +68,7 @@ const config = {
 // All options are optional
 const options = {
   // Use a different root document to set your resource collections, by default it uses the root collections of firestore
-  rootRef: 'root-collection/some-doc',
+  rootRef: 'root-collection/some-doc' | () => 'root-collection/some-doc',
   // Your own, previously initialized firebase app instance
   app: firebaseAppInstance,
   // Enable logging of react-admin-firebase
@@ -82,6 +81,13 @@ const options = {
   persistence: 'session',
   // Disable the metadata; 'createdate', 'lastupdate', 'createdby', 'updatedby'
   disableMeta: false,
+  // Have custom metadata field names instead of: 'createdate', 'lastupdate', 'createdby', 'updatedby'
+  renameMetaFields: {
+    created_at: 'my_created_at', // default: 'createdate'
+    created_by: 'my_created_by', // default: 'createdby'
+    updated_at: 'my_updated_at', // default: 'lastupdate'
+    updated_by: 'my_updated_by', // default: 'updatedby'
+  },
   // Prevents document from getting the ID field added as a property
   dontAddIdFieldToDoc: false,
   // Adds 'deleted' meta field for non-destructive deleting functionality
@@ -95,7 +101,20 @@ const options = {
   // when getting docs - main use case is handling multiple firebase projects (environments)
   // and moving/copying documents/storage files between them - with relativeFilePaths, download url
   // always point to project own storage
-  relativeFilePaths: false 
+  relativeFilePaths: false, 
+  // Add file name to storage path, when set to true the file name is included in the path
+  useFileNamesInStorage: false,
+  // Use firebase sdk queries for pagination, filtering and sorting
+  lazyLoading: {
+    enabled: false
+  },
+  // Logging of all reads performed by app (additional feature, for lazy-loading testing)
+  firestoreCostsLogger: {
+    enabled: false,
+    localStoragePrefix // optional
+  },
+  // Function to transform documentData before they are written to Firestore
+  transformToDb: (resourceName, documentData, documentId) => documentDataTransformed
 }
 
 const dataProvider = FirebaseDataProvider(config, options);
@@ -159,7 +178,7 @@ To get the currently logged in user run `const user = await authProvider.checkAu
 
 ## Realtime Updates!
 
-NOTE: Realtime updates were removed in `react-admin` v3.x (see https://github.com/marmelab/react-admin/pull/3908). As such, `react-admin-firebase` v3.x also does not support Realtime Updates. However, much of the original code used for this functionalaity in `react-admin` v2.x remains - including the documentation below. For updates on the implementation of realtime please follow these issues:
+NOTE: Realtime updates were removed in `react-admin` v3.x (see https://github.com/marmelab/react-admin/pull/3908). As such, `react-admin-firebase` v3.x also does not support Realtime Updates. However, much of the original code used for this functionality in `react-admin` v2.x remains - including the documentation below. For updates on the implementation of realtime please follow these issues:
 - https://github.com/benwinding/react-admin-firebase/issues/49
 - https://github.com/benwinding/react-admin-firebase/issues/57
 
@@ -195,6 +214,25 @@ const options = {
 const firebaseRealtime = FirebaseRealTimeSaga(dataProvider, options);
 ...
 ```
+
+## Upload Progress
+
+Monitor file upload data using custom React component which listen for following events (`CustomEvent`):
+
+- `FILE_UPLOAD_WILL_START`
+- `FILE_UPLOAD_START`
+- `FILE_UPLOAD_PROGRESS`
+- `FILE_UPLOAD_PAUSED`
+- `FILE_UPLOAD_CANCELD`
+- `FILE_UPLOAD_COMPLETE`
+- `FILE_SAVED`
+
+All events have data passed in `details` key:
+
+- `fileName`: the file anme
+- `data`: percentage for `FILE_UPLOAD_PROGRESS`
+
+Events are sent to HTML DOM element with id "eventMonitor". See demo implementation for example at [src-demo/src/App.js](src-demo/src/App.js);
 
 # Help Develop `react-admin-firebase`?
 

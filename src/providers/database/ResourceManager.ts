@@ -1,40 +1,53 @@
-// Firebase types
+import { doc, getDoc, getDocs } from 'firebase/firestore';
+import { FireStoreCollectionRef, FireStoreQuery } from 'misc/firebase-models';
 import {
-  CollectionReference,
-  QueryDocumentSnapshot,
-  FirebaseFirestore
-} from "@firebase/firestore-types";
-import { RAFirebaseOptions } from "../RAFirebaseOptions";
-import { IFirebaseWrapper } from "./firebase/IFirebaseWrapper";
-import { User } from "@firebase/auth-types";
-import { log, getAbsolutePath, messageTypes, logError, parseAllDatesDoc } from "../../misc";
+  getAbsolutePath,
+  IFirestoreLogger,
+  log,
+  logWarn,
+  messageTypes,
+  parseFireStoreDocument,
+} from '../../misc';
+import { RAFirebaseOptions } from '../options';
+import { IFirebaseWrapper } from './firebase/IFirebaseWrapper';
 
+type IResourceItem = {} & { id: string; deleted?: boolean };
 export interface IResource {
   path: string;
   pathAbsolute: string;
-  collection: CollectionReference;
-  list: Array<{}>;
+  collection: FireStoreCollectionRef;
+  list: Array<IResourceItem>;
 }
 
 export class ResourceManager {
-  private resources: {
-    [resourceName: string]: IResource;
-  } = {};
-
-  private db: FirebaseFirestore;
+  private resources: Record<string, IResource> = {};
 
   constructor(
     private fireWrapper: IFirebaseWrapper,
-    private options: RAFirebaseOptions
+    private options: RAFirebaseOptions,
+    private flogger: IFirestoreLogger
   ) {
-    this.db = fireWrapper.db();
+    this.fireWrapper.OnUserLogout(() => {
+      this.resources = {};
+    });
+  }
+
+  public async TryGetResource(
+    resourceName: string,
+    refresh?: 'REFRESH',
+    collectionQuery?: messageTypes.CollectionQueryType
+  ): Promise<IResource> {
+    if (refresh) {
+      await this.RefreshResource(resourceName, collectionQuery);
+    }
+    return this.TryGetResourcePromise(resourceName, collectionQuery);
   }
 
   public GetResource(relativePath: string): IResource {
     const resource: IResource = this.resources[relativePath];
     if (!resource) {
       throw new Error(
-        `react-admin-firebase: Cant find resource: "${relativePath}"`
+        `react-admin-firebase: Can't find resource: "${relativePath}"`
       );
     }
     return resource;
@@ -42,13 +55,13 @@ export class ResourceManager {
 
   public async TryGetResourcePromise(
     relativePath: string,
-    collectionQuery: messageTypes.CollectionQueryType
+    collectionQuery?: messageTypes.CollectionQueryType
   ): Promise<IResource> {
-    log("resourceManager.TryGetResourcePromise", {
+    log('resourceManager.TryGetResourcePromise', {
       relativePath,
-      collectionQuery
+      collectionQuery,
     });
-    await this.initPath(relativePath, collectionQuery);
+    await this.initPath(relativePath);
 
     const resource: IResource = this.resources[relativePath];
     if (!resource) {
@@ -61,109 +74,121 @@ export class ResourceManager {
 
   public async RefreshResource(
     relativePath: string,
-    collectionQuery: messageTypes.CollectionQueryType
+    collectionQuery: messageTypes.CollectionQueryType | undefined
   ) {
-    log("resourceManager.RefreshResource", { relativePath, collectionQuery });
-    await this.initPath(relativePath, collectionQuery);
+    if (this.options?.lazyLoading?.enabled) {
+      logWarn('resourceManager.RefreshResource', {
+        warn: 'RefreshResource is not available in lazy loading mode',
+      });
+      throw new Error(
+        'react-admin-firebase: RefreshResource is not available in lazy loading mode'
+      );
+    }
+
+    log('resourceManager.RefreshResource', { relativePath, collectionQuery });
+    await this.initPath(relativePath);
     const resource = this.resources[relativePath];
 
-    const collection = resource.collection;
-    const query = this.applyQuery(collection, collectionQuery);
-    const newDocs = await query.get();
+    const collectionRef = resource.collection;
+    const collectionOrQuery = this.applyQuery(collectionRef, collectionQuery);
+    const newDocs = await getDocs(collectionOrQuery);
 
-    resource.list = newDocs.docs.map(doc => this.parseFireStoreDocument(doc));
-    log("resourceManager.RefreshResource", {
+    newDocs.forEach((d) =>
+      resource.list.push(parseFireStoreDocument<IResourceItem>(d))
+    );
+
+    const count = newDocs.docs.length;
+    this.flogger.logDocument(count)();
+    log('resourceManager.RefreshResource', {
       newDocs,
       resource,
-      collectionPath: collection.path
+      collectionPath: collectionRef.path,
     });
   }
 
   public async GetSingleDoc(relativePath: string, docId: string) {
     await this.initPath(relativePath);
-    const resource = this.resources[relativePath];
-    const docSnap = await resource.collection.doc(docId).get();
+    const resource = this.GetResource(relativePath);
+    this.flogger.logDocument(1)();
+    const docSnap = await getDoc(doc(resource.collection, docId));
     if (!docSnap.exists) {
-      throw new Error("react-admin-firebase: No id found matching: " + docId);
+      throw new Error('react-admin-firebase: No id found matching: ' + docId);
     }
-    const result = this.parseFireStoreDocument(docSnap);
-    log("resourceManager.GetSingleDoc", {
+    const result = parseFireStoreDocument(docSnap);
+    log('resourceManager.GetSingleDoc', {
       relativePath,
       resource,
       docId,
       docSnap,
-      result
+      result,
     });
     return result;
   }
 
-  private async initPath(
-    relativePath: string,
-    collectionQuery?: messageTypes.CollectionQueryType
-  ): Promise<void> {
+  private async initPath(relativePath: string): Promise<void> {
     const rootRef = this.options && this.options.rootRef;
     const absolutePath = getAbsolutePath(rootRef, relativePath);
     const hasBeenInited = !!this.resources[relativePath];
-    log("resourceManager.initPath()", {
+    log('resourceManager.initPath()', {
       absolutePath,
-      hasBeenInited
+      hasBeenInited,
     });
     if (hasBeenInited) {
-      log("resourceManager.initPath() has been initialized already...");
+      log('resourceManager.initPath() has been initialized already...');
       return;
     }
-    const collection = this.db.collection(absolutePath);
-    const list: Array<{}> = [];
+    const collection = this.fireWrapper.dbGetCollection(absolutePath);
+    const list: Array<IResourceItem> = [];
     const resource: IResource = {
-      collection: collection,
-      list: list,
+      collection,
+      list,
       path: relativePath,
-      pathAbsolute: absolutePath
+      pathAbsolute: absolutePath,
     };
     this.resources[relativePath] = resource;
-    log("resourceManager.initPath() setting resource...", {
+    log('resourceManager.initPath() setting resource...', {
       resource,
       allResources: this.resources,
       collection: collection,
-      collectionPath: collection.path
+      collectionPath: collection.path,
     });
   }
 
-  private parseFireStoreDocument(doc: QueryDocumentSnapshot): {} {
-    const data = doc.data();
-    parseAllDatesDoc(data);
-    // React Admin requires an id field on every document,
-    // So we can just using the firestore document id
-    return { id: doc.id, ...data };
+  public async getUserIdentifier(): Promise<string> {
+    const identifier = this.options.associateUsersById
+      ? await this.getCurrentUserId()
+      : await this.getCurrentUserEmail();
+    return identifier;
   }
 
-  public async getUserLogin(): Promise<User> {
-    return new Promise((resolve, reject) => {
-      this.fireWrapper.auth().onAuthStateChanged(user => {
-        resolve(user);
-      });
-    });
+  private async getCurrentUserEmail() {
+    const user = await this.fireWrapper.authGetUserLoggedIn();
+    if (user) {
+      return user.email as string;
+    } else {
+      return 'annonymous user';
+    }
   }
-
-  private removeResource(resourceName: string) {
-    delete this.resources[resourceName];
+  private async getCurrentUserId() {
+    const user = await this.fireWrapper.authGetUserLoggedIn();
+    if (user) {
+      return user.uid;
+    } else {
+      return 'annonymous user';
+    }
   }
 
   private applyQuery(
-    collection: CollectionReference,
+    collection: FireStoreCollectionRef,
     collectionQuery?: messageTypes.CollectionQueryType
-  ): CollectionReference {
-    let collref: CollectionReference;
-    if (collectionQuery) {
-      collref = collectionQuery(collection);
-    } else {
-      collref = collection;
-    }
-    log("resourceManager.applyQuery() ...", {
+  ): FireStoreCollectionRef | FireStoreQuery {
+    const collRef = collectionQuery ? collectionQuery(collection) : collection;
+
+    log('resourceManager.applyQuery() ...', {
       collection,
-      collectionQuery: (collectionQuery || "-").toString(),
-      collref
+      collectionQuery: (collectionQuery || '-').toString(),
+      collRef,
     });
-    return collref;
+    return collRef;
   }
 }

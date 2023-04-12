@@ -10,7 +10,8 @@ import {
   TextField,
 } from "@material-ui/core";
 
-import firebase from "firebase";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
 
 export default function AlertDialog() {
   const [open, setOpen] = React.useState(false);
@@ -50,8 +51,8 @@ export default function AlertDialog() {
   };
 
   return (
-    <div>
-      <Button variant="contained" onClick={handleClickOpen}>
+    <div style={{display: 'flex', justifyContent: 'center', padding: '10px', paddingTop: '0px'}}>
+      <Button variant="contained" onClick={handleClickOpen} style={{width: '100%'}}>
         Forgot Password?
       </Button>
       <Dialog

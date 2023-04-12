@@ -1,30 +1,25 @@
-import { IFirebaseWrapper } from "../../src/providers/database/firebase/IFirebaseWrapper";
-import {
-  initFireWrapper,
-  clearDb,
-  getDocsFromCollection,
-  createDoc,
-} from "./utils/test-helpers";
-import { FirebaseClient } from "../../src/providers/database/FirebaseClient";
+import { doc, setDoc } from 'firebase/firestore';
+import { Delete } from '../../src/providers/commands';
+import { getDocsFromCollection, MakeMockClient } from './utils/test-helpers';
 
-describe("api methods", () => {
-  let fire: IFirebaseWrapper;
-  const testId = "test2";
-  beforeEach(() => (fire = initFireWrapper(testId)));
-  afterEach(async () => clearDb(testId));
+describe('api methods', () => {
+  test('FireClient delete doc', async () => {
+    const client = await MakeMockClient();
 
-  test("FirebaseClient delete doc", async () => {
-    const docName = "test123";
-    await fire.db().collection("t2").doc(docName).set({ name: "Jim" });
+    const docId = 'test123';
+    const docObj = { id: docId, name: 'Jim' };
+    await setDoc(doc(client.fireWrapper.dbGetCollection('t2'), docId), docObj);
 
-    const client = new FirebaseClient(fire, {});
-    await client.apiDelete("t2", {
-      id: docName,
-      previousData: {},
-    });
+    await Delete(
+      't2',
+      {
+        id: docId,
+        previousData: docObj,
+      },
+      client
+    );
 
-    const users = await getDocsFromCollection(fire.db(), "t2");
+    const users = await getDocsFromCollection(client.fireWrapper.db(), 't2');
     expect(users.length).toBe(0);
   }, 100000);
 });
-

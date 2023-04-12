@@ -1,26 +1,19 @@
-import { IFirebaseWrapper } from "../../src/providers/database/firebase/IFirebaseWrapper";
-import { initFireWrapper, clearDb } from "./utils/test-helpers";
-import { FirebaseClient } from "../../src/providers/database/FirebaseClient";
+import { doc, getDocs, setDoc } from 'firebase/firestore';
+import { DeleteMany } from '../../src/providers/commands';
+import { MakeMockClient } from './utils/test-helpers';
 
-describe("api methods", () => {
-  let fire: IFirebaseWrapper;
-  const testId = "test-deletemany";
-  beforeEach(() => (fire = initFireWrapper(testId)));
-  afterEach(async () => clearDb(testId));
-
-  test("FirebaseClient delete doc", async () => {
-    const docIds = ["test123", "test22222", "asdads"];
-    const collName = "deleteables";
-    const collection = fire.db().collection(collName);
+describe('api methods', () => {
+  test('FireClient delete doc', async () => {
+    const client = await MakeMockClient();
+    const docIds = ['test123', 'test22222', 'asdads'];
+    const collName = 'deleteables';
+    const collection = client.fireWrapper.dbGetCollection(collName);
     await Promise.all(
-      docIds.map((id) => collection.doc(id).set({ title: "ee" }))
+      docIds.map((id) => setDoc(doc(collection, id), { title: 'ee' }))
     );
 
-    const client = new FirebaseClient(fire, {});
-    await client.apiDeleteMany(collName, {
-      ids: docIds.slice(1),
-    });
-    const res = await collection.get();
+    await DeleteMany(collName, { ids: docIds.slice(1) }, client);
+    const res = await getDocs(collection);
     expect(res.docs.length).toBe(1);
   }, 100000);
 });

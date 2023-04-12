@@ -1,99 +1,118 @@
-import { logError } from "./../misc/logger";
-import {
-  CREATE,
-  DELETE,
-  DELETE_MANY,
-  GET_LIST,
-  GET_MANY,
-  GET_MANY_REFERENCE,
-  GET_ONE,
-  UPDATE,
-  UPDATE_MANY,
-} from "react-admin";
 import {
   getAbsolutePath,
   log,
-  CheckLogging,
-  messageTypes,
+  logError,
+  logger,
+  MakeFirestoreLogger,
   retrieveStatusCode,
-} from "../misc";
-import { RAFirebaseOptions } from "./RAFirebaseOptions";
-import { FirebaseClient } from "./database/FirebaseClient";
-import { FirebaseWrapper } from "./database/firebase/FirebaseWrapper";
+} from '../misc';
+import { FireApp } from '../misc/firebase-models';
+import * as ra from '../misc/react-admin-models';
+import { Create, Delete, DeleteMany, Update, UpdateMany } from './commands';
+import { FirebaseWrapper } from './database/firebase/FirebaseWrapper';
+import { FireClient } from './database/FireClient';
+import { RAFirebaseOptions } from './options';
+import { GetList, GetMany, GetManyReference, GetOne } from './queries';
 
-export let fb: FirebaseClient;
+export interface IDataProvider extends ra.DataProvider {
+  app: FireApp;
+}
 
 export function DataProvider(
   firebaseConfig: {},
   optionsInput?: RAFirebaseOptions
-) {
+): IDataProvider {
   const options = optionsInput || {};
-  VerifyDataProviderArgs(firebaseConfig, options);
-  CheckLogging(firebaseConfig, options);
+  verifyDataProviderArgs(firebaseConfig, options);
 
-  log("react-admin-firebase:: Creating FirebaseDataProvider", {
+  const flogger = MakeFirestoreLogger(options);
+  logger.SetEnabled(!!options?.logging);
+  flogger.SetEnabled(!!options?.firestoreCostsLogger?.enabled);
+  flogger.ResetCount(!options?.firestoreCostsLogger?.persistCount);
+  log('Creating FirebaseDataProvider', {
     firebaseConfig,
     options,
   });
-  const fireWrapper = new FirebaseWrapper();
-  fireWrapper.init(firebaseConfig, optionsInput);
-  fb = new FirebaseClient(fireWrapper, options);
-  async function providerApi(
-    type: string,
-    resourceName: string,
-    params: any
-  ): Promise<messageTypes.IResponseAny> {
-    log("FirebaseDataProvider: event", { type, resourceName, params });
-    let res: messageTypes.IResponseAny;
+
+  const fireWrapper = new FirebaseWrapper(optionsInput, firebaseConfig);
+
+  async function run<T>(cb: () => Promise<T>) {
+    let res: any;
     try {
-      switch (type) {
-        case GET_MANY:
-          res = await fb.apiGetMany(resourceName, params);
-          break;
-        case GET_MANY_REFERENCE:
-          res = await fb.apiGetManyReference(resourceName, params);
-          break;
-        case GET_LIST:
-          res = await fb.apiGetList(resourceName, params);
-          break;
-        case GET_ONE:
-          res = await fb.apiGetOne(resourceName, params);
-          break;
-        case CREATE:
-          res = await fb.apiCreate(resourceName, params);
-          break;
-        case UPDATE:
-          res = await fb.apiUpdate(resourceName, params);
-          break;
-        case UPDATE_MANY:
-          res = await fb.apiUpdateMany(resourceName, params);
-          break;
-        case DELETE:
-          if (options.softDelete)
-            res = await fb.apiSoftDelete(resourceName, params);
-          else res = await fb.apiDelete(resourceName, params);
-          break;
-        case DELETE_MANY:
-          if (options.softDelete)
-            res = await fb.apiSoftDeleteMany(resourceName, params);
-          else res = await fb.apiDeleteMany(resourceName, params);
-          break;
-        default:
-          throw new Error(`Unknkown dataprovider command type: "${type}"`);
-      }
+      res = await cb();
       return res;
     } catch (error) {
-      const errorMsg = error.toString();
+      const errorMsg = ((error as any) || '').toString();
       const code = retrieveStatusCode(errorMsg);
       const errorObj = { status: code, message: errorMsg, json: res };
       logError('DataProvider:', error, { errorMsg, code, errorObj });
       throw errorObj;
     }
   }
-  return providerApi;
+  const client = new FireClient(fireWrapper, options, flogger);
+
+  const newProviderApi: IDataProvider = {
+    app: fireWrapper.GetApp(),
+    getList<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.GetListParams
+    ): Promise<ra.GetListResult<RecordType>> {
+      return run(() => GetList<RecordType>(resource, params, client));
+    },
+    getOne<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.GetOneParams
+    ): Promise<ra.GetOneResult<RecordType>> {
+      return run(() => GetOne<RecordType>(resource, params, client));
+    },
+    getMany<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.GetManyParams
+    ): Promise<ra.GetManyResult<RecordType>> {
+      return run(() => GetMany<RecordType>(resource, params, client));
+    },
+    getManyReference<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.GetManyReferenceParams
+    ): Promise<ra.GetManyReferenceResult<RecordType>> {
+      return run(() => GetManyReference<RecordType>(resource, params, client));
+    },
+    update<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.UpdateParams
+    ): Promise<ra.UpdateResult<RecordType>> {
+      return run(() => Update<RecordType>(resource, params, client));
+    },
+    updateMany(
+      resource: string,
+      params: ra.UpdateManyParams
+    ): Promise<ra.UpdateManyResult> {
+      return run(() => UpdateMany(resource, params, client));
+    },
+    create<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.CreateParams
+    ): Promise<ra.CreateResult<RecordType>> {
+      return run(() => Create<RecordType>(resource, params, client));
+    },
+    delete<RecordType extends ra.Record = ra.Record>(
+      resource: string,
+      params: ra.DeleteParams
+    ): Promise<ra.DeleteResult<RecordType>> {
+      return run(() => Delete(resource, params, client));
+    },
+    deleteMany(
+      resource: string,
+      params: ra.DeleteManyParams
+    ): Promise<ra.DeleteManyResult> {
+      return run(() => DeleteMany(resource, params, client));
+    },
+  };
+
+  return newProviderApi;
 }
 
-function VerifyDataProviderArgs(
+function verifyDataProviderArgs(
   firebaseConfig: {},
   options?: RAFirebaseOptions
 ) {
@@ -101,11 +120,11 @@ function VerifyDataProviderArgs(
   const hasNoConfig = !firebaseConfig;
   if (hasNoConfig && hasNoApp) {
     throw new Error(
-      "Please pass the Firebase firebaseConfig object or options.app to the FirebaseAuthProvider"
+      'Please pass the Firebase firebaseConfig object or options.app to the FirebaseAuthProvider'
     );
   }
-  if (options.rootRef) {
+  if (options && options.rootRef) {
     // Will throw error if rootRef doesn't point to a document
-    getAbsolutePath(options.rootRef, "test");
+    getAbsolutePath(options.rootRef, 'test');
   }
 }

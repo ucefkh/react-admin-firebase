@@ -1,39 +1,44 @@
+type SearchValues = {} | number | string | boolean | null;
+type SearchValue = SearchValues | SearchValue[];
+
 export interface SearchObj {
   searchField: string;
-  searchValue: number | string | boolean;
+  searchValue: SearchValue;
 }
 export function getFieldReferences(
   fieldName: string,
-  value: {} | number | string | boolean
+  value: {} | SearchValue
 ): SearchObj[] {
-  const isFalsey = !value;
-  const isSimple = isFalsey;
-  typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean";
+  const isFalsy = !value;
+  const isSimple =
+    isFalsy ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean';
+
   if (isSimple) {
     return [
       {
         searchField: fieldName,
-        searchValue: value as number | string | boolean,
+        searchValue: value as SearchValue,
       },
     ];
   }
-  const tree = {};
+  const tree = {} as Record<string, SearchValue>;
   tree[fieldName] = value;
   return objectFlatten(tree);
 }
 
 export function objectFlatten(tree: {}): SearchObj[] {
   var leaves: SearchObj[] = [];
-  var recursivelyWalk = function (obj: {}, path) {
-    path = path || "";
+  var recursivelyWalk = (obj: any, path: string | null) => {
+    path = path || '';
     for (var key in obj) {
       if (obj.hasOwnProperty(key)) {
-        const objVal = obj[key];
-        const currentPath = !!path ? path + "." + key : key;
+        const objVal = obj && obj[key];
+        const currentPath = !!path ? path + '.' + key : key;
         const isWalkable =
-          typeof objVal === "object" || objVal instanceof Array;
+          typeof objVal === 'object' || objVal instanceof Array;
         if (isWalkable) {
           recursivelyWalk(objVal, currentPath);
         } else {

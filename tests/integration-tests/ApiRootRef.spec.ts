@@ -1,14 +1,30 @@
-import { ResourceManager } from '../../src/providers/database/ResourceManager';
-import { initFireWrapper } from './utils/test-helpers';
+import { addDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { MakeMockClient } from './utils/test-helpers';
 
-const fire = initFireWrapper('root-test');
+describe('ApiRootRef', () => {
+  test('rootref1', async () => {
+    const client = await MakeMockClient({ rootRef: 'root-ref1/ok' });
+    const rm = client.rm;
+    const docRef = await addDoc(
+      client.fireWrapper.dbGetCollection('root-ref1/ok/t1'),
+      { test: '' }
+    );
+    const r = await rm.TryGetResourcePromise('t1');
+    const snap = await getDocs(r.collection);
+    await deleteDoc(docRef);
+    expect(snap.docs.length).toBe(1);
+  }, 10000);
 
-test('rootref1', async () => {
-  const rm = new ResourceManager(fire, {
-    rootRef: 'root-ref1/ok'
-  });
-  await fire.db().collection('root-ref1/ok/t1').add({test:''})
-  const r = await rm.TryGetResourcePromise('t1', null);
-  const snap = await r.collection.get();
-  expect(snap.docs.length).toBe(1);
-}, 10000);
+  test('rootreffunction1', async () => {
+    const client = await MakeMockClient({ rootRef: 'root-ref-function1/ok' });
+    const rm = client.rm;
+    const docRef = await addDoc(
+      client.fireWrapper.dbGetCollection('root-ref-function1/ok/t1'),
+      { test: '' }
+    );
+    const r = await rm.TryGetResourcePromise('t1');
+    const snap = await getDocs(r.collection);
+    await deleteDoc(docRef);
+    expect(snap.docs.length).toBe(1);
+  }, 10000);
+});

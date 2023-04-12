@@ -1,13 +1,10 @@
-// in src/posts.js
 import * as React from "react";
-// tslint:disable-next-line:no-var-requires
 import {
   Datagrid,
   List,
   Show,
   Create,
   Edit,
-  Filter,
   DateField,
   ImageField,
   ImageInput,
@@ -17,7 +14,6 @@ import {
   TextInput,
   ShowButton,
   EditButton,
-  DeleteButton,
   RichTextField,
   ReferenceField,
   SelectInput,
@@ -26,33 +22,41 @@ import {
   FileField,
   ArrayInput,
   SimpleFormIterator,
+  DateInput,
+  Toolbar,
+  SaveButton,
 } from "react-admin";
-import RichTextInput from "ra-input-rich-text";
+import {
+  CustomDeleteButton, 
+  CustomBulkDeleteButton,
+} from './CustomDeleteButtons'
+import { FirebaseReferenceField, FirebaseReferenceInput } from './FirebaseReferenceFields';
 
-const PostFilter = (props) => (
-  <Filter {...props}>
-    <TextInput label="Search" source="title" alwaysOn />
-  </Filter>
-);
+// const PostFilter = (props) => (
+//   <Filter {...props}>
+//     <TextInput label="Search" source="title" alwaysOn />
+//   </Filter>
+// );
 
-const ReferenceFilter = (props) => (
-  <Filter {...props}>
-    <ReferenceInput
-      label="Organization"
-      source="user.id"
-      reference="users"
-      allowEmpty
-    >
-      <SelectInput optionText="name" />
-    </ReferenceInput>
-  </Filter>
-);
+// const ReferenceFilter = (props) => (
+//   <Filter {...props}>
+//     <ReferenceInput
+//       label="Organization"
+//       source="user.id"
+//       reference="users"
+//       allowEmpty
+//     >
+//       <SelectInput optionText="name" />
+//     </ReferenceInput>
+//   </Filter>
+// );
 
 export const PostList = (props) => (
   <List
     {...props}
-    filters={<ReferenceFilter />}
-    filter={{ updatedby: "test@example.com" }}
+    bulkActionButtons={<CustomBulkDeleteButton />}
+    // filters={<ReferenceFilter />}
+    // filter={{ updatedby: "test@example.com" }}
   >
     <Datagrid>
       <TextField source="id" />
@@ -61,16 +65,21 @@ export const PostList = (props) => (
       <TextField source="updatedby" />
       <TextField source="createdby" />
       <RichTextField source="body" />
-      <ReferenceField label="User" source="user_id" reference="users">
+      <ReferenceField label="User Ref" source="user_ref.___refid" reference="users">
         <TextField source="name" />
       </ReferenceField>
+
       <ShowButton label="" />
       <EditButton label="" />
-      <DeleteButton label="" redirect={false} />
+      {/* <CustomDeleteButton label="" redirect={false} /> */}
     </Datagrid>
   </List>
 );
 
+// const ConditionalEmailField = ({}) =>
+//   record && record.hasEmail ? (
+//     <EmailField source="email" record={record} {...rest} />
+//   ) : null;
 export const PostShow = (props) => (
   <Show {...props}>
     <SimpleShowLayout>
@@ -79,9 +88,23 @@ export const PostShow = (props) => (
       <TextField source="lastupdate" />
       <TextField source="title" />
       <RichTextField source="body" />
-      <ReferenceField label="User" source="user_id" reference="users">
+
+      <ReferenceField label="User Id" source="user_id" reference="users">
         <TextField source="name" />
       </ReferenceField>
+
+      <ReferenceField label="User Ref" source="user_ref.___refid" reference="users">
+        <TextField source="name" />
+      </ReferenceField>
+      {/* Or use the easier <FirebaseReferenceField> */}
+      <FirebaseReferenceField
+        label="User (Reference Doc)"
+        source="user_ref"
+        reference="users"
+      >
+        <TextField source="name" />
+      </FirebaseReferenceField>
+
       <FileField
         source="files_multiple.src"
         title="files_multiple.title"
@@ -96,15 +119,31 @@ export const PostCreate = (props) => (
     <SimpleForm>
       <TextInput source="id" />
       <TextInput source="title" />
-      <RichTextInput source="body" />
+      <TextInput source="body" />
+      <DateInput source="date" parse={val => new Date(val)} />
       <ReferenceInput
-        label="User"
+        label="User Id"
         source="user_id"
         reference="users"
         // filter={{ isAdmin: true }}
       >
-        <SelectInput label="User" optionText="name" />
+        <SelectInput optionText="name" />
       </ReferenceInput>
+      <ReferenceInput
+        label="User Ref"
+        source="user_ref.___refid"
+        reference="users"
+      >
+        <SelectInput optionText="name" />
+      </ReferenceInput>
+      {/* Or use the easier <FirebaseReferenceInput> */}
+      <FirebaseReferenceInput
+        label="User Ref (Firebase)"
+        source="user_ref"
+        reference="users"
+      >
+        <SelectInput optionText="name" />
+      </FirebaseReferenceInput>
       <FileInput source="files_multiple" multiple label="Files with (multiple)">
         <FileField source="src" title="title" />
       </FileInput>
@@ -127,22 +166,45 @@ export const PostCreate = (props) => (
   </Create>
 );
 
+const ToolbarForEdit = (props) => {
+  return(
+      <Toolbar {...props} style={{justifyContent: 'space-between'}}>
+          <SaveButton />
+          <CustomDeleteButton />
+      </Toolbar>
+  )
+}
+
 export const PostEdit = (props) => (
   <Edit {...props}>
-    <SimpleForm>
+    <SimpleForm toolbar={<ToolbarForEdit />}>
       <TextInput disabled source="id" />
       <DateField source="createdate" />
       <DateField source="lastupdate" />
       <TextInput source="title" />
-      <RichTextInput source="body" />
+      <TextInput source="body" />
       <ReferenceInput
-        label="User"
+        label="User Id"
         source="user_id"
         reference="users"
         // filter={{ isAdmin: true }}
       >
-        <SelectInput label="User" optionText="name" />
+        <SelectInput optionText="name" />
       </ReferenceInput>
+      <ReferenceInput
+        label="User Ref"
+        source="user_ref.___refid"
+        reference="users"
+      >
+        <SelectInput optionText="name" />
+      </ReferenceInput>
+      <FirebaseReferenceInput
+        label="User Ref (Firebase)"
+        source="user_ref"
+        reference="users"
+      >
+        <SelectInput optionText="name" />
+      </FirebaseReferenceInput>
       <FileInput source="files_multiple" multiple label="Files with (multiple)">
         <FileField source="src" title="title" />
       </FileInput>
