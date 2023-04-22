@@ -1,7 +1,7 @@
 {
-  "name": "react-admin-firebase",
-  "description": "A firebase data provider for the React Admin framework",
-  "version": "4.0.0",
+  "name": "react-admin-firebase-01tek",
+  "description": "A firebase data provider for the React Admin framework - custom version for 01TEK with patches",
+  "version": "4.1.4",
   "peerDependencies": {
     "firebase": "^9.6.4",
     "react": "17.x || 18.x",
